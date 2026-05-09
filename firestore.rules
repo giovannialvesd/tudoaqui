@@ -1,0 +1,514 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- PRIMITIVE HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Base admin check on email for list query performance (no DB lookup)
+    function isAdminEmail() {
+      return isSignedIn() && 
+             "email" in request.auth.token && 
+             (request.auth.token.email.lower() == "alves.giovannic@gmail.com" || 
+              request.auth.token.email.lower() == "petzb.vidapet@gmail.com");
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        isAdminEmail() || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'super_admin')
+      );
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        isSuperAdmin() || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin')
+      );
+    }
+
+    function isCityAdmin(cityId) {
+      return isSignedIn() && (
+        isAdmin() || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') in ['city_admin', 'city_editor', 'city_support'] && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('cityId', '') == cityId)
+      );
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidCityId(id) {
+      return id == null || (id is string && id.size() <= 128);
+    }
+
+    // --- VALIDATION HELPERS ---
+
+    function isValidUser(data) {
+      let isAssigningHighRole = data.role in ['admin', 'super_admin'];
+      return data.keys().hasAll(['userId', 'name', 'role', 'createdAt', 'updatedAt'])
+        && (data.userId == request.auth.uid || isAdmin())
+        && (!isAssigningHighRole || isSuperAdmin())
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && (data.email is string || data.email == null)
+        && data.role in ['client', 'merchant', 'driver', 'provider', 'admin', 'super_admin', 'city_admin', 'city_editor', 'city_support']
+        && (!('cityId' in data) || isValidCityId(data.cityId))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCity(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.slug is string && data.slug.size() > 0 && data.slug.size() <= 100
+        && data.state is string && data.state.size() == 2
+        && (!('active' in data) || data.active is bool)
+        && (!('createdAt' in data) || data.createdAt is timestamp)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidBusinessProfile(data) {
+       return data.keys().hasAll(['userId', 'businessName', 'category', 'updatedAt'])
+        && (data.userId == request.auth.uid || isAdmin() || isCityAdmin(data.get('cityId', '')))
+        && data.businessName is string && data.businessName.size() > 0 && data.businessName.size() <= 100
+        && data.category is string && data.category.size() > 0 && data.category.size() <= 60
+        && (!('cityId' in data) || isValidCityId(data.cityId))
+        && (!('description' in data) || (data.description is string && data.description.size() <= 1000))
+        && (!('acceptsDelivery' in data) || data.acceptsDelivery is bool)
+        && (!('bannerImage' in data) || (data.bannerImage is string && data.bannerImage.size() <= 1048576))
+        && (!('logoImage' in data) || (data.logoImage is string && data.logoImage.size() <= 1048576))
+        && (!('address' in data) || (data.address is string && data.address.size() <= 200))
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 20))
+        && (!('isOpen' in data) || data.isOpen is bool)
+        && (!('rating' in data) || data.rating is number)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidProduct(data) {
+       return data.keys().hasAll(['merchantId', 'name', 'price', 'createdAt'])
+        && (data.merchantId == request.auth.uid || isAdmin() || isCityAdmin(data.get('cityId', '')))
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 150
+        && data.price is number && data.price >= 0
+        && data.createdAt is timestamp
+        && (!('cityId' in data) || isValidCityId(data.cityId))
+        && (!('description' in data) || (data.description is string && data.description.size() <= 1000))
+        && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 1048576))
+        && (!('category' in data) || (data.category is string && data.category.size() <= 60))
+        && (!('merchantName' in data) || (data.merchantName is string && data.merchantName.size() <= 100))
+        && (!('isPromotion' in data) || data.isPromotion is bool)
+        && (!('isAvailable' in data) || data.isAvailable is bool);
+    }
+
+    function isValidTrip(data) {
+       return data.keys().hasAll(['driverId', 'origin', 'destination', 'price', 'departureTime', 'status', 'createdAt'])
+        && (data.driverId == request.auth.uid || isAdmin() || isCityAdmin(data.get('cityId', '')))
+        && data.origin is string && data.origin.size() > 0 && data.origin.size() <= 200
+        && data.destination is string && data.destination.size() > 0 && data.destination.size() <= 200
+        && data.price is number && data.price >= 0
+        && data.departureTime is number
+        && data.status in ['scheduled', 'in-progress', 'completed', 'cancelled']
+        && (!('cityId' in data) || isValidCityId(data.cityId))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidHelpRequest(data) {
+       return data.keys().hasAll(['requesterId', 'title', 'description', 'category', 'status', 'createdAt'])
+        && (data.requesterId == request.auth.uid || isAdmin() || isCityAdmin(data.get('cityId', '')))
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 100
+        && data.description is string && data.description.size() > 0 && data.description.size() <= 2000
+        && data.category is string && data.category.size() > 0 && data.category.size() <= 60
+        && data.status in ['open', 'accepted', 'resolved', 'cancelled']
+        && (!('cityId' in data) || isValidCityId(data.cityId))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidBanner(data) {
+       return data.keys().hasAll(['title', 'imageUrl', 'active', 'createdBy', 'createdAt'])
+        && data.title is string && data.title.size() <= 100
+        && data.imageUrl is string && data.imageUrl.size() <= 1048576
+        && data.active is bool
+        && (data.createdBy == request.auth.uid || isAdmin() || isCityAdmin(data.get('cityId', '')))
+        && (!('cityId' in data) || isValidCityId(data.cityId))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidJob(data) {
+       return data.keys().hasAll(['title', 'status', 'createdAt'])
+        && (data.get('merchantId', '') == request.auth.uid || isAdmin() || isCityAdmin(data.get('cityId', '')))
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 150
+        && data.status in ['active', 'inactive', 'pending']
+        && (!('company' in data) || (data.company is string && data.company.size() <= 100))
+        && (!('cityId' in data) || isValidCityId(data.cityId))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidCampaign(data) {
+       return data.keys().hasAll(['title', 'active', 'createdAt'])
+        && (isAdmin() || isCityAdmin(data.get('cityId', '')))
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 150
+        && data.active is bool
+        && (!('cityId' in data) || isValidCityId(data.cityId))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidHomeSection(data) {
+       return data.keys().hasAll(['title', 'type', 'order', 'active', 'createdAt'])
+        && (isAdmin() || isCityAdmin(data.get('cityId', '')))
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 100
+        && data.type in ['products', 'merchants', 'services', 'campaigns']
+        && data.order is number
+        && data.active is bool
+        && (!('cityId' in data) || isValidCityId(data.cityId))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidCategory(data) {
+       return data.keys().hasAll(['name', 'type', 'active', 'createdAt'])
+        && (isAdmin() || isCityAdmin(data.get('cityId', '')))
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.type in ['product', 'merchant', 'service', 'job', 'campaign', 'adoption']
+        && data.active is bool
+        && (!('cityId' in data) || isValidCityId(data.cityId))
+        && (!('order' in data) || data.order is number)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidAdoptionPet(data) {
+       return data.keys().hasAll(['name', 'species', 'imageUrl', 'ownerId', 'status', 'createdAt'])
+        && (data.ownerId == request.auth.uid || isAdmin() || isCityAdmin(data.get('cityId', '')))
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.species is string && data.species.size() > 0 && data.species.size() <= 50
+        && data.imageUrl is string && data.imageUrl.size() <= 1048576
+        && data.status in ['pending', 'approved', 'rejected']
+        && (!('cityId' in data) || isValidCityId(data.cityId))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidAnimalReport(data) {
+       return data.keys().hasAll(['content', 'userId', 'status', 'createdAt'])
+        && data.content is string && data.content.size() > 0 && data.content.size() <= 2000
+        && (data.userId == request.auth.uid || data.userId == 'anonymous' || isAdmin() || isCityAdmin(data.get('cityId', '')))
+        && data.status in ['pending', 'investigating', 'resolved']
+        && (!('cityId' in data) || isValidCityId(data.cityId))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidFeedback(data) {
+       return data.keys().hasAll(['userId', 'userName', 'content', 'rating', 'approved', 'createdAt'])
+        && data.userId == request.auth.uid
+        && data.userName is string && data.userName.size() > 0 && data.userName.size() <= 100
+        && data.content is string && data.content.size() > 0 && data.content.size() <= 1000
+        && data.rating is number && data.rating >= 1 && data.rating <= 5
+        && data.approved is bool
+        && (!('cityId' in data) || isValidCityId(data.cityId))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidGarbageRoute(data) {
+       return data.keys().hasAll(['name', 'days', 'time', 'type'])
+        && (isAdmin() || isCityAdmin(data.get('cityId', '')))
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && (!('cityId' in data) || isValidCityId(data.cityId));
+    }
+
+    function isValidDriverProfile(data) {
+       return data.keys().hasAll(['userId', 'name', 'updatedAt'])
+        && (data.userId == request.auth.uid || isAdmin() || isCityAdmin(data.get('cityId', '')))
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && (!('cityId' in data) || isValidCityId(data.cityId))
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidProviderProfile(data) {
+       return data.keys().hasAll(['userId', 'name', 'updatedAt'])
+        && (data.userId == request.auth.uid || isAdmin() || isCityAdmin(data.get('cityId', '')))
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && (!('cityId' in data) || isValidCityId(data.cityId))
+        && data.updatedAt is timestamp;
+    }
+
+    // --- COLLECTIONS ---
+
+    match /cities/{cityId} {
+      allow get: if isValidId(cityId);
+      allow list: if true;
+      allow create: if isSuperAdmin() && isValidId(cityId) && isValidCity(incoming());
+      allow update: if isSuperAdmin() && isValidId(cityId) && isValidCity(incoming());
+      allow delete: if isSuperAdmin();
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() 
+                    && isValidId(userId) 
+                    && (userId == request.auth.uid || isAdmin())
+                    && isValidUser(incoming())
+                    && incoming().createdAt == request.time
+                    && incoming().updatedAt == request.time;
+                    
+      allow update: if isSignedIn() 
+                    && isValidId(userId)
+                    && (userId == request.auth.uid || isAdmin())
+                    && isValidUser(incoming())
+                    && incoming().userId == existing().userId
+                    && incoming().createdAt == existing().createdAt
+                    && incoming().updatedAt == request.time;
+    }
+
+    match /business_profiles/{userId} {
+      allow get: if isValidId(userId);
+      allow list: if true;
+      allow create: if isSignedIn()
+                    && isValidId(userId)
+                    && (userId == request.auth.uid || isAdmin() || isCityAdmin(incoming().get('cityId', '')))
+                    && isValidBusinessProfile(incoming());
+                    
+      allow update: if isSignedIn()
+                    && isValidId(userId)
+                    && (userId == request.auth.uid || isAdmin() || isCityAdmin(existing().get('cityId', '')))
+                    && isValidBusinessProfile(incoming());
+      
+      allow delete: if isAdmin() || (isSignedIn() && isCityAdmin(existing().get('cityId', '')));
+    }
+
+    match /driver_profiles/{userId} {
+      allow get: if isValidId(userId);
+      allow list: if true;
+      allow create: if isSignedIn()
+                    && isValidId(userId)
+                    && (userId == request.auth.uid || isAdmin() || isCityAdmin(incoming().get('cityId', '')))
+                    && isValidDriverProfile(incoming());
+                    
+      allow update: if isSignedIn()
+                    && isValidId(userId)
+                    && (userId == request.auth.uid || isAdmin() || isCityAdmin(existing().get('cityId', '')))
+                    && isValidDriverProfile(incoming());
+
+      allow delete: if isAdmin() || (isSignedIn() && isCityAdmin(existing().get('cityId', '')));
+    }
+
+    match /provider_profiles/{userId} {
+      allow get: if isValidId(userId);
+      allow list: if true;
+      allow create: if isSignedIn()
+                    && isValidId(userId)
+                    && (userId == request.auth.uid || isAdmin() || isCityAdmin(incoming().get('cityId', '')))
+                    && isValidProviderProfile(incoming());
+                    
+      allow update: if isSignedIn()
+                    && isValidId(userId)
+                    && (userId == request.auth.uid || isAdmin() || isCityAdmin(existing().get('cityId', '')))
+                    && isValidProviderProfile(incoming());
+
+      allow delete: if isAdmin() || (isSignedIn() && isCityAdmin(existing().get('cityId', '')));
+    }
+
+    match /products/{productId} {
+      allow get: if isValidId(productId);
+      allow list: if true;
+      allow create: if isSignedIn()
+                    && isValidId(productId)
+                    && isValidProduct(incoming())
+                    && (incoming().merchantId == request.auth.uid || isAdmin() || isCityAdmin(incoming().get('cityId', '')))
+                    && incoming().createdAt == request.time;
+
+      allow update: if isSignedIn()
+                    && isValidId(productId)
+                    && (isAdmin() || existing().merchantId == request.auth.uid || isCityAdmin(existing().get('cityId', '')))
+                    && isValidProduct(incoming());
+                    
+      allow delete: if isSignedIn()
+                    && isValidId(productId)
+                    && (isAdmin() || existing().merchantId == request.auth.uid || isCityAdmin(existing().get('cityId', '')));
+    }
+
+    match /trips/{tripId} {
+      allow get: if isValidId(tripId);
+      allow list: if true;
+      allow create: if isSignedIn()
+                    && isValidId(tripId)
+                    && isValidTrip(incoming())
+                    && (incoming().driverId == request.auth.uid || isAdmin() || isCityAdmin(incoming().get('cityId', '')))
+                    && incoming().createdAt == request.time;
+
+      allow update: if isSignedIn()
+                    && isValidId(tripId)
+                    && (isAdmin() || existing().driverId == request.auth.uid || isCityAdmin(existing().get('cityId', '')))
+                    && isValidTrip(incoming());
+                    
+      allow delete: if isSignedIn()
+                    && isValidId(tripId)
+                    && (isAdmin() || existing().driverId == request.auth.uid || isCityAdmin(existing().get('cityId', '')));
+    }
+
+    match /help_requests/{requestId} {
+      allow get: if isValidId(requestId);
+      allow list: if true;
+      allow create: if isSignedIn()
+                    && isValidId(requestId)
+                    && isValidHelpRequest(incoming())
+                    && (incoming().requesterId == request.auth.uid || isAdmin() || isCityAdmin(incoming().get('cityId', '')))
+                    && incoming().createdAt == request.time;
+
+      allow update: if isSignedIn()
+                    && isValidId(requestId)
+                    && isValidHelpRequest(incoming())
+                    && (isAdmin() || existing().requesterId == request.auth.uid || isCityAdmin(existing().get('cityId', '')));
+                    
+      allow delete: if isSignedIn()
+                    && isValidId(requestId)
+                    && (isAdmin() || existing().requesterId == request.auth.uid || isCityAdmin(existing().get('cityId', '')));
+    }
+
+    match /banners/{bannerId} {
+      allow get: if isValidId(bannerId);
+      allow list: if true;
+      allow create: if isSignedIn()
+                    && isValidId(bannerId)
+                    && isValidBanner(incoming())
+                    && (isAdmin() || isCityAdmin(incoming().get('cityId', '')))
+                    && incoming().createdAt == request.time;
+
+      allow update: if isSignedIn()
+                    && isValidId(bannerId)
+                    && (isAdmin() || isCityAdmin(existing().get('cityId', '')));
+                    
+      allow delete: if isSignedIn()
+                    && isValidId(bannerId)
+                    && (isAdmin() || isCityAdmin(existing().get('cityId', '')));
+    }
+
+    match /campaigns/{campaignId} {
+      allow get: if isValidId(campaignId);
+      allow list: if true;
+      allow create: if (isAdmin() || isCityAdmin(incoming().get('cityId', ''))) && isValidId(campaignId) && isValidCampaign(incoming());
+      allow update: if (isAdmin() || isCityAdmin(existing().get('cityId', ''))) && isValidId(campaignId) && isValidCampaign(incoming());
+      allow delete: if (isAdmin() || isCityAdmin(existing().get('cityId', ''))) && isValidId(campaignId);
+    }
+
+    match /jobs/{jobId} {
+      allow get: if isValidId(jobId);
+      allow list: if true;
+      allow create: if isSignedIn()
+                    && isValidId(jobId)
+                    && isValidJob(incoming())
+                    && (isAdmin() || isCityAdmin(incoming().get('cityId', '')))
+                    && incoming().createdAt == request.time;
+
+      allow update: if isSignedIn()
+                    && isValidId(jobId)
+                    && (isAdmin() || isCityAdmin(existing().get('cityId', '')))
+                    && isValidJob(incoming());
+                    
+      allow delete: if isSignedIn()
+                    && isValidId(jobId)
+                    && (isAdmin() || isCityAdmin(existing().get('cityId', '')));
+    }
+
+    match /adoption_pets/{petId} {
+      allow get: if isValidId(petId);
+      allow list: if true;
+      allow create: if isSignedIn()
+                    && isValidId(petId)
+                    && isValidAdoptionPet(incoming())
+                    && (incoming().ownerId == request.auth.uid || isAdmin() || isCityAdmin(incoming().get('cityId', '')))
+                    && incoming().createdAt == request.time;
+      
+      allow update: if isSignedIn()
+                    && isValidId(petId)
+                    && (isAdmin() || isCityAdmin(existing().get('cityId', '')) || (existing().ownerId == request.auth.uid && isValidAdoptionPet(incoming())));
+      
+      allow delete: if isSignedIn()
+                    && isValidId(petId)
+                    && (isAdmin() || isCityAdmin(existing().get('cityId', '')) || existing().ownerId == request.auth.uid);
+    }
+
+    match /animal_reports/{reportId} {
+      allow get: if isAdmin() || isCityAdmin(resource.data.get('cityId', '')) || (isSignedIn() && (resource == null || existing().userId == request.auth.uid));
+      allow list: if isAdminEmail() || (isSignedIn() && (resource.data.userId == request.auth.uid || isCityAdmin(resource.data.get('cityId', ''))));
+      
+      allow create: if isValidId(reportId)
+                    && isValidAnimalReport(incoming())
+                    && incoming().status == 'pending'
+                    && incoming().createdAt == request.time;
+      
+      allow update: if isAdmin() || isCityAdmin(existing().get('cityId', ''));
+      allow delete: if isAdmin() || isCityAdmin(existing().get('cityId', ''));
+    }
+
+    match /feedbacks/{feedbackId} {
+      allow get: if isValidId(feedbackId);
+      allow list: if true;
+      allow create: if isSignedIn() && isValidFeedback(incoming()) && incoming().approved == false;
+      allow update: if isAdmin() || isCityAdmin(existing().get('cityId', ''));
+      allow delete: if isAdmin() || isCityAdmin(existing().get('cityId', ''));
+    }
+
+    match /garbage_routes/{routeId} {
+      allow get: if isValidId(routeId);
+      allow list: if true;
+      allow create: if (isAdmin() || isCityAdmin(incoming().get('cityId', ''))) && isValidId(routeId) && isValidGarbageRoute(incoming());
+      allow update: if (isAdmin() || isCityAdmin(existing().get('cityId', ''))) && isValidId(routeId) && isValidGarbageRoute(incoming());
+      allow delete: if (isAdmin() || isCityAdmin(existing().get('cityId', ''))) && isValidId(routeId);
+    }
+
+    match /categories/{categoryId} {
+      allow get: if isValidId(categoryId);
+      allow list: if true;
+      allow create: if isAdmin() || isCityAdmin(incoming().get('cityId', ''));
+      allow update: if isAdmin() || isCityAdmin(existing().get('cityId', ''));
+      allow delete: if isAdmin() || isCityAdmin(existing().get('cityId', ''));
+    }
+
+    match /home_sections/{sectionId} {
+      allow get: if isValidId(sectionId);
+      allow list: if true;
+      allow create: if isAdmin() || isCityAdmin(incoming().get('cityId', ''));
+      allow update: if isAdmin() || isCityAdmin(existing().get('cityId', ''));
+      allow delete: if isAdmin() || isCityAdmin(existing().get('cityId', ''));
+    }
+    
+    match /generated_pages/{pageId} {
+      allow get: if isValidId(pageId);
+      allow list: if true;
+      allow create: if isAdmin() || isCityAdmin(incoming().get('cityId', ''));
+      allow update: if isAdmin() || isCityAdmin(existing().get('cityId', ''));
+      allow delete: if isAdmin() || isCityAdmin(existing().get('cityId', ''));
+    }
+
+    match /category_requests/{requestId} {
+      allow get: if isSignedIn();
+      allow list: if isAdmin() || isCityAdmin(resource.data.get('cityId', ''));
+      allow create: if isSignedIn() && isValidId(requestId);
+      allow update: if isAdmin() || isCityAdmin(existing().get('cityId', ''));
+      allow delete: if isAdmin() || isCityAdmin(existing().get('cityId', ''));
+    }
+
+    match /role_requests/{requestId} {
+      allow get: if isSignedIn();
+      allow list: if isAdmin() || isCityAdmin(resource.data.get('cityId', ''));
+      allow create: if isSignedIn() && isValidId(requestId);
+      allow update: if isAdmin() || isCityAdmin(existing().get('cityId', ''));
+      allow delete: if isAdmin() || isCityAdmin(existing().get('cityId', ''));
+    }
+  }
+}

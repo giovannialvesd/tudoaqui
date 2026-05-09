@@ -1,0 +1,6 @@
+{
+  "name": "TudoAqui",
+  "description": "Plataforma moderna de comércio e serviços locais com múltiplos perfis de usuários.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": []
+}

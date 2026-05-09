@@ -1,0 +1,446 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user profile in the system.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["client", "merchant", "driver", "provider", "admin", "super_admin", "city_admin", "city_editor", "city_support"] },
+        "cityId": { "type": "string", "description": "The official city of the user" },
+        "createdAt": { "type": "number", "description": "timestamp" },
+        "updatedAt": { "type": "number", "description": "timestamp" }
+      },
+      "required": ["userId", "name", "role", "createdAt"]
+    },
+    "City": {
+      "title": "City",
+      "description": "A city or municipality portal.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "state": { "type": "string" },
+        "logo": { "type": "string" },
+        "banner": { "type": "string" },
+        "description": { "type": "string" },
+        "primaryColor": { "type": "string" },
+        "secondaryColor": { "type": "string" },
+        "domain": { "type": "string" },
+        "subdomain": { "type": "string" },
+        "contactEmail": { "type": "string" },
+        "contactPhone": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "visibility": { "type": "string", "enum": ["public", "private"] },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["name", "slug", "state", "status", "visibility", "createdAt"]
+    },
+    "BusinessProfile": {
+      "title": "BusinessProfile",
+      "description": "Specific data for a merchant or provider.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "cityId": { "type": "string" },
+        "businessName": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "acceptsDelivery": { "type": "boolean" },
+        "bannerImage": { "type": "string" },
+        "logoImage": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "isOpen": { "type": "boolean" },
+        "rating": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["userId", "businessName", "category", "updatedAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "A product sold by a merchant.",
+      "type": "object",
+      "properties": {
+        "merchantId": { "type": "string" },
+        "cityId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "imageUrl": { "type": "string" },
+        "category": { "type": "string" },
+        "isAvailable": { "type": "boolean" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["merchantId", "name", "price", "createdAt"]
+    },
+    "Trip": {
+      "title": "Trip",
+      "description": "A transport or ride-share offered by a driver.",
+      "type": "object",
+      "properties": {
+        "driverId": { "type": "string" },
+        "cityId": { "type": "string" },
+        "origin": { "type": "string" },
+        "destination": { "type": "string" },
+        "price": { "type": "number" },
+        "seatsAvailable": { "type": "number" },
+        "departureTime": { "type": "number" },
+        "vehicleInfo": { "type": "string" },
+        "status": { "type": "string", "enum": ["scheduled", "in-progress", "completed", "cancelled"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["driverId", "origin", "destination", "price", "departureTime", "status", "createdAt"]
+    },
+    "HelpRequest": {
+      "title": "HelpRequest",
+      "description": "A community help request or service request.",
+      "type": "object",
+      "properties": {
+        "requesterId": { "type": "string" },
+        "cityId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "location": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "accepted", "resolved", "cancelled"] },
+        "acceptedById": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["requesterId", "title", "description", "category", "status", "createdAt"]
+    },
+    "RoleRequest": {
+      "title": "RoleRequest",
+      "description": "User requesting a new role.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "requestedRole": { "type": "string", "enum": ["merchant", "driver", "provider"] },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "formData": { "type": "object" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["userId", "requestedRole", "status", "createdAt"]
+    },
+    "Banner": {
+      "title": "Banner",
+      "description": "Top dynamic banner.",
+      "type": "object",
+      "properties": {
+        "cityId": { "type": "string" },
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "link": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["title", "imageUrl", "active", "createdBy", "createdAt"]
+    },
+    "Feedback": {
+      "title": "Feedback",
+      "description": "System feedback from user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "content": { "type": "string" },
+        "rating": { "type": "number" },
+        "approved": { "type": "boolean" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["userId", "userName", "content", "rating", "approved", "createdAt"]
+    },
+    "BusSchedule": {
+      "title": "BusSchedule",
+      "description": "Bus routes and schedules.",
+      "type": "object",
+      "properties": {
+        "cityId": { "type": "string" },
+        "routeName": { "type": "string" },
+        "stops": { "type": "array", "items": { "type": "string" } },
+        "departureTimes": { "type": "array", "items": { "type": "string" } },
+        "active": { "type": "boolean" }
+      },
+      "required": ["routeName", "active"]
+    },
+    "Campaign": {
+      "title": "Campaign",
+      "description": "Donation campaigns and community help.",
+      "type": "object",
+      "properties": {
+        "cityId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "tag": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "location": { "type": "string" },
+        "howToHelp": { "type": "string" },
+        "actionText": { "type": "string" },
+        "actionUrl": { "type": "string" },
+        "pixKey": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "goal": { "type": "number" },
+        "raised": { "type": "number" },
+        "needs": { "type": "array", "items": { "type": "string" } },
+        "active": { "type": "boolean" },
+        "pageConfig": { "type": "object" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["title", "description", "active", "createdAt"]
+    },
+    "GeneratedPage": {
+      "title": "GeneratedPage",
+      "description": "AI Generated Dynamic Pages.",
+      "type": "object",
+      "properties": {
+        "cityId": { "type": "string" },
+        "title": { "type": "string" },
+        "path": { "type": "string" },
+        "blocks": { "type": "array", "items": { "type": "object" } },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["title", "path", "blocks", "createdBy", "createdAt"]
+    },
+    "AdoptionPet": {
+      "title": "AdoptionPet",
+      "description": "An animal available for adoption.",
+      "type": "object",
+      "properties": {
+        "cityId": { "type": "string" },
+        "name": { "type": "string" },
+        "species": { "type": "string" },
+        "breed": { "type": "string" },
+        "age": { "type": "string" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "location": { "type": "string" },
+        "phone": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "ownerPhone": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "number", "description": "timestamp" }
+      },
+      "required": ["name", "species", "imageUrl", "ownerId", "status", "createdAt"]
+    },
+    "AnimalReport": {
+      "title": "AnimalReport",
+      "description": "A report of animal mistreatment or abandonment.",
+      "type": "object",
+      "properties": {
+        "cityId": { "type": "string" },
+        "content": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhone": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "investigating", "resolved"] },
+        "createdAt": { "type": "number", "description": "timestamp" }
+      },
+      "required": ["content", "userId", "status", "createdAt"]
+    },
+    "GarbageRoute": {
+      "title": "GarbageRoute",
+      "description": "Garbage collection route info.",
+      "type": "object",
+      "properties": {
+        "cityId": { "type": "string" },
+        "name": { "type": "string" },
+        "days": { "type": "string" },
+        "time": { "type": "string" },
+        "type": { "type": "string" }
+      },
+      "required": ["name", "days", "time", "type"]
+    },
+    "Job": {
+      "title": "Job",
+      "description": "A job opportunity.",
+      "type": "object",
+      "properties": {
+        "cityId": { "type": "string" },
+        "title": { "type": "string" },
+        "company": { "type": "string" },
+        "merchantId": { "type": "string" },
+        "location": { "type": "string" },
+        "salary": { "type": "string" },
+        "description": { "type": "string" },
+        "requirements": { "type": "string" },
+        "type": { "type": "string" },
+        "hours": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "active", "rejected"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["title", "status", "createdAt"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "An app category.",
+      "type": "object",
+      "properties": {
+        "cityId": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["merchant", "service", "product", "job"] },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["name", "type", "active"]
+    },
+    "CategoryRequest": {
+      "title": "CategoryRequest",
+      "description": "A user request for a new category.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["userId", "name", "status", "createdAt"]
+    },
+    "HomeSection": {
+      "title": "HomeSection",
+      "description": "A dynamic section on the home page.",
+      "type": "object",
+      "properties": {
+        "cityId": { "type": "string" },
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "type": { "type": "string" },
+        "items": { "type": "array" },
+        "order": { "type": "number" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["title", "type", "order", "active"]
+    },
+    "ProviderProfile": {
+      "title": "ProviderProfile",
+      "description": "A service provider profile.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "category": { "type": "string" },
+        "address": { "type": "string" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "rating": { "type": "number" },
+        "isAvailable": { "type": "boolean" },
+        "updatedAt": { "type": "number" }
+      }
+    },
+    "DriverProfile": {
+      "title": "DriverProfile",
+      "description": "A driver profile.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "vehicle": { "type": "string" },
+        "basePrice": { "type": "string" },
+        "availability": { "type": "string" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "rating": { "type": "number" },
+        "isAvailable": { "type": "boolean" },
+        "updatedAt": { "type": "number" }
+      }
+    }
+  },
+  "firestore": {
+    "/campaigns/{campaignId}": {
+      "schema": { "$ref": "#/entities/Campaign" },
+      "description": "Donation campaigns and community help pages."
+    },
+    "/cities/{cityId}": {
+      "schema": { "$ref": "#/entities/City" },
+      "description": "City portal profiles."
+    },
+    "/generated_pages/{pageId}": {
+      "schema": { "$ref": "#/entities/GeneratedPage" },
+      "description": "AI Generated Dynamic Pages."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profile document."
+    },
+    "/business_profiles/{userId}": {
+      "schema": { "$ref": "#/entities/BusinessProfile" },
+      "description": "Business profile data for merchants and providers."
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Products available in the marketplace."
+    },
+    "/trips/{tripId}": {
+       "schema": { "$ref": "#/entities/Trip" },
+       "description": "Available transport trips."
+    },
+    "/help_requests/{requestId}": {
+       "schema": { "$ref": "#/entities/HelpRequest" },
+       "description": "Community help requests."
+    },
+    "/role_requests/{requestId}": {
+       "schema": { "$ref": "#/entities/RoleRequest" },
+       "description": "Role upgrade requests."
+    },
+    "/banners/{bannerId}": {
+       "schema": { "$ref": "#/entities/Banner" },
+       "description": "Dynamic banners."
+    },
+    "/feedbacks/{feedbackId}": {
+       "schema": { "$ref": "#/entities/Feedback" },
+       "description": "System feedbacks."
+    },
+    "/bus_schedules/{scheduleId}": {
+       "schema": { "$ref": "#/entities/BusSchedule" },
+       "description": "Bus schedules."
+    },
+    "/adoption_pets/{petId}": {
+      "schema": { "$ref": "#/entities/AdoptionPet" },
+      "description": "Pets for adoption."
+    },
+    "/animal_reports/{reportId}": {
+      "schema": { "$ref": "#/entities/AnimalReport" },
+      "description": "Animal abuse reports."
+    },
+    "/garbage_routes/{routeId}": {
+      "schema": { "$ref": "#/entities/GarbageRoute" },
+      "description": "Garbage routes."
+    },
+    "/jobs/{jobId}": {
+      "schema": { "$ref": "#/entities/Job" },
+      "description": "Job vacancies."
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "System categories."
+    },
+    "/category_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/CategoryRequest" },
+      "description": "Category requests."
+    },
+    "/home_sections/{sectionId}": {
+      "schema": { "$ref": "#/entities/HomeSection" },
+      "description": "Homepage dynamic sections."
+    },
+    "/provider_profiles/{userId}": {
+      "schema": { "$ref": "#/entities/ProviderProfile" },
+      "description": "Service professional profiles."
+    },
+    "/driver_profiles/{userId}": {
+      "schema": { "$ref": "#/entities/DriverProfile" },
+      "description": "Driver partner profiles."
+    }
+  }
+}
